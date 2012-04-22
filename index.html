@@ -6,6 +6,8 @@
 
 <script type="text/javascript" src="glMatrix-0.9.5.min.js"></script>
 <script type="text/javascript" src="webgl-utils.js"></script>
+<script type="text/javascript" src="shaderLoader.js"></script>
+<script type="text/javascript" src="camera.js"></script>
 
 <script id="shader-fs" type="x-shader/x-fragment">
     precision mediump float;
@@ -52,74 +54,6 @@
         }
     }
 
-
-    function getShader(gl, id) {
-        var shaderScript = document.getElementById(id);
-        if (!shaderScript) {
-            return null;
-        }
-
-        var str = "";
-        var k = shaderScript.firstChild;
-        while (k) {
-            if (k.nodeType == 3) {
-                str += k.textContent;
-            }
-            k = k.nextSibling;
-        }
-
-        var shader;
-        if (shaderScript.type == "x-shader/x-fragment") {
-            shader = gl.createShader(gl.FRAGMENT_SHADER);
-        } else if (shaderScript.type == "x-shader/x-vertex") {
-            shader = gl.createShader(gl.VERTEX_SHADER);
-        } else {
-            return null;
-        }
-
-        gl.shaderSource(shader, str);
-        gl.compileShader(shader);
-
-        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-            alert(gl.getShaderInfoLog(shader));
-            return null;
-        }
-
-        return shader;
-    }
-
-
-    var shaderProgram;
-
-    function initShaders() {
-        var fragmentShader = getShader(gl, "shader-fs");
-        var vertexShader = getShader(gl, "shader-vs");
-
-        shaderProgram = gl.createProgram();
-        gl.attachShader(shaderProgram, vertexShader);
-        gl.attachShader(shaderProgram, fragmentShader);
-        gl.linkProgram(shaderProgram);
-
-        if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
-            alert("Could not initialise shaders");
-        }
-
-        gl.useProgram(shaderProgram);
-
-        shaderProgram.vertexPositionAttribute = gl.getAttribLocation(shaderProgram, "aVertexPosition");
-        gl.enableVertexAttribArray(shaderProgram.vertexPositionAttribute);
-
-        shaderProgram.textureCoordAttribute = gl.getAttribLocation(shaderProgram, "aTextureCoord");
-        gl.enableVertexAttribArray(shaderProgram.textureCoordAttribute);
-
-        shaderProgram.pMatrixUniform = gl.getUniformLocation(shaderProgram, "uPMatrix");
-        shaderProgram.mvMatrixUniform = gl.getUniformLocation(shaderProgram, "uMVMatrix");
-        shaderProgram.samplerUniform = gl.getUniformLocation(shaderProgram, "uSampler");
-        gl.enable(gl.BLEND);
-	gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-    }
-
-
     function handleLoadedTexture(texture) {
         gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
         gl.bindTexture(gl.TEXTURE_2D, texture);
@@ -141,7 +75,15 @@
         }
 
         playerTexture.image.src = "MarioSprite.png";
-	player.texture = playerTexture;
+        player.texture = playerTexture;
+
+        var enemyTexture = gl.createTexture();
+        enemyTexture.image = new Image();
+        enemyTexture.image.onload = function () {
+          handleLoadedTexture(enemyTexture)
+        }
+        enemyTexture.image.src = "MarioSprite.png";
+        enemy.texture = enemyTexture;
 
         rockTexture = gl.createTexture();
         rockTexture.image = new Image();
@@ -149,7 +91,7 @@
             handleLoadedTexture(rockTexture)
         }
 
-        rockTexture.image.src = "Granite2.png";
+        rockTexture.image.src = "Granite.png";
     }
 
 
@@ -196,6 +138,7 @@
 
     var camera;
     var player;
+    var enemy;
 
 //GLOBAL CONSTANTS
     var START_POS =[0,0,0];
@@ -213,7 +156,14 @@
 	player.pos = START_POS;
 	player.speed = PLAYER_SPEED;
 	player.vertexPositionBuffer = gl.createBuffer();
-	player.texture = null;
+  player.texture = null;
+
+  enemy = new Character();
+  enemy.height = PLAYER_HEIGHT;
+  enemy.pos = [0,0,0];
+  enemy.speed = PLAYER_SPEED;
+  enemy.vertextPositionBuffer = gl.createBuffer();
+  enemy.texture = null;
 
 	camera = new Camera();
 
@@ -231,82 +181,44 @@
 	this.vel = [0,0,0];
     }
 
-    Character.prototype.draw = function() {
+  Character.prototype.draw = function() {
+    mvPushMatrix();
 
-	mvPushMatrix();
+    mat4.translate(mvMatrix, this.pos);
+    mat4.translate(mvMatrix, [0,this.height/2,0]);
+    mat4.scale(mvMatrix, [this.height/2,this.height/2,this.height/2]);
+    draw2dTexture(this.texture);
+    mat4.rotate(mvMatrix,degToRad(camera.pitch),[1,0,0]);
 
-        mat4.translate(mvMatrix, player.pos);
-	mat4.translate(mvMatrix,[0,player.height/2,0]);
-	mat4.scale(mvMatrix,[player.height/2,player.height/2,player.height/2]);
-	draw2dTexture(player.texture);
-	mat4.rotate(mvMatrix,degToRad(camera.pitch),[1,0,0]);
+    mvPopMatrix();
+  }
 
-	mvPopMatrix();
+  function draw2dTexture(elementTexture){
 
-    }
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, elementTexture);
 
-    function draw2dTexture(elementTexture){
+    gl.uniform1i(shaderProgram.samplerUniform, 0);
 
-        gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_2D, elementTexture);
+    gl.bindBuffer(gl.ARRAY_BUFFER, playerVertexTextureCoordBuffer);
+    gl.vertexAttribPointer(shaderProgram.textureCoordAttribute, playerVertexTextureCoordBuffer.itemSize, gl.FLOAT, false, 0, 0);
 
-        gl.uniform1i(shaderProgram.samplerUniform, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, playerVertexPositionBuffer);
+    gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, playerVertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
 
-        gl.bindBuffer(gl.ARRAY_BUFFER, playerVertexTextureCoordBuffer);
-        gl.vertexAttribPointer(shaderProgram.textureCoordAttribute, playerVertexTextureCoordBuffer.itemSize, gl.FLOAT, false, 0, 0);
+    setMatrixUniforms();
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, playerVertexPositionBuffer.numItems);
 
-        gl.bindBuffer(gl.ARRAY_BUFFER, playerVertexPositionBuffer);
-        gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, playerVertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
-
-        setMatrixUniforms();
-        gl.drawArrays(gl.TRIANGLE_STRIP, 0, playerVertexPositionBuffer.numItems);
-
-    }
+  }
 	
-
-    function Camera(){
-	this.distance = 0;
-	this.yaw = 0;
-	this.pitch = 0;
-	this.roll = 0;
-	this.pos = vec3;
-	this.pos = [0,0,0];
-	this.vel = vec3;
-	this.vel = [0,0,0];
-    }
-
-    var speed = 0;
-
-    function handleKeys() {
-	
-        if (currentlyPressedKeys[37] || currentlyPressedKeys[65]) {
-            // Left cursor key or A
-            player.vel[0]=-player.speed;
-        } else if (currentlyPressedKeys[39] || currentlyPressedKeys[68]) {
-            // Right cursor key or D
-            player.vel[0]=player.speed;
-        } else {
-            player.vel[0]=0;
-        }
-
-        if (currentlyPressedKeys[38] || currentlyPressedKeys[87]) {
-            // Up cursor key or W
-            player.vel[2]=-player.speed;
-        } else if (currentlyPressedKeys[40] || currentlyPressedKeys[83]) {
-            // Down cursor key
-            player.vel[2]=player.speed;
-        } else {
-            player.vel[2]=0;
-        }
-
-    }
-
-
     var worldVertexPositionBuffer = null;
     var worldVertexTextureCoordBuffer = null;
 
     var playerVertextPositionBuffer = null;
     var playerVertextTextureCoordBuffer =null;
+
+    var enemyVertexPositionBuffer = null;
+    var enemyVertexTextureCoordBuffer = null;
 
     function loadPlayer(){
 	var vertexCount=0;
@@ -336,6 +248,34 @@
         playerVertexTextureCoordBuffer.numItems = vertexCount;
 
     }
+
+  function loadEnemy() {
+    var vertextCount = 0;
+    var vertexPositions = [
+	    1.0, 1.0, 0.0, 
+	   -1.0, 1.0, 0.0,
+	    1.0,-1.0, 0.0,
+	   -1.0,-1.0, 0.0,
+	  ];
+	  var vertexTextureCoords = [
+	    1.0, 1.0,
+      0.0, 1.0,
+      1.0, 0.0,
+      0.0, 0.0];
+    vertexCount = 4;
+
+    enemyVertexPositionBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, enemyVertexPositionBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexPositions), gl.STATIC_DRAW);
+    enemyVertexPositionBuffer.itemSize = 3;
+    enemyVertexPositionBuffer.numItems = vertexCount;
+
+    enemyVertexTextureCoordBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, enemyVertexTextureCoordBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexTextureCoords), gl.STATIC_DRAW);
+    enemyVertexTextureCoordBuffer.itemSize = 2;
+    enemyVertexTextureCoordBuffer.numItems = vertexCount;
+  }
 
     function handleLoadedWorld(data) {
         var lines = data.split("\n");
@@ -425,7 +365,8 @@
 //===================================================================
  
 	//draw character
-	player.draw();
+        player.draw();
+        enemy.draw();
 
 
     }
@@ -461,7 +402,8 @@
         initGL(canvas);
 
         initShaders();
-	loadPlayer();
+        loadPlayer();
+        loadEnemy();
 	initObjects();
         initTexture();
         loadWorld();
