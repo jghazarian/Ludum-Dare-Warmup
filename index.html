@@ -8,6 +8,8 @@
 <script type="text/javascript" src="webgl-utils.js"></script>
 <script type="text/javascript" src="shaderLoader.js"></script>
 <script type="text/javascript" src="camera.js"></script>
+<script type="text/javascript" src="audia.js"></script>
+<script type="text/javascript" src="audio.js"></script>
 
 <script id="shader-fs" type="x-shader/x-fragment">
     precision mediump float;
@@ -407,6 +409,12 @@
 	initObjects();
         initTexture();
         loadWorld();
+        //audio.music.play();
+        //audio.test.play();
+        //TODO: figure out how to get audio to load/play reliably
+        setTimeout((function() {
+          audio.test.play();
+        }), 2000);
 
         gl.clearColor(0.0, 0.0, 0.0, 1.0);
         gl.enable(gl.DEPTH_TEST);
