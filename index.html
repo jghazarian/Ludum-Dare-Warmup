@@ -162,7 +162,7 @@
 
   enemy = new Character();
   enemy.height = PLAYER_HEIGHT;
-  enemy.pos = [0,0,0];
+  enemy.pos = [-1,0,0];
   enemy.speed = PLAYER_SPEED;
   enemy.vertextPositionBuffer = gl.createBuffer();
   enemy.texture = null;
@@ -389,11 +389,22 @@
         lastTime = timeNow;
     }
 
+    function checkCollision() {
+      distance = [player.pos[0]-enemy.pos[0],player.pos[2]-enemy.pos[2]];
+      mag = Math.pow(distance[0],2) + Math.pow(distance[1],2);
+
+      if(mag < 0.5)
+      {
+        console.log("YOU LOSE");
+      }
+    }
+
 
     function tick() {
         handleKeys();
         animate();
         drawScene();
+        checkCollision();
         requestAnimFrame(tick);
     }
 
@@ -413,7 +424,7 @@
         //audio.test.play();
         //TODO: figure out how to get audio to load/play reliably
         setTimeout((function() {
-          audio.test.play();
+          //audio.test.play();
         }), 2000);
 
         gl.clearColor(0.0, 0.0, 0.0, 1.0);
